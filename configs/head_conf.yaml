@@ -1,3 +1,8 @@
 BaseHead:
     feat_dim: 512
     num_class: 85742
+
+SubCenterHead:
+  feat_dim: 512
+  num_class: 0
+  k: 3
