@@ -4,6 +4,18 @@ import torch.cuda.comm
 import torch.distributed as dist
 from torch.distributed import ReduceOp, get_world_size
 
+class SmoothedCrossEntropy(torch.nn.Module):
+    def __init__(self, eps=0.1):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, logits, target):
+        log_probs = torch.nn.functional.log_softmax(logits, dim=1)
+        n_classes = logits.size(1)
+        target_probs = torch.nn.functional.one_hot(target, num_classes=n_classes).float()
+        target_probs = (1 - self.eps) * target_probs + self.eps / n_classes
+        loss = -(target_probs * log_probs).sum(dim=1).mean()
+        return loss
 
 class GBCosFace(torch.nn.Module):
     def __init__(self, local_rank, s=32, min_cos_v=0.5, max_cos_v=0.7, margin=0.16, update_rate=0.01, alpha=0.15):
