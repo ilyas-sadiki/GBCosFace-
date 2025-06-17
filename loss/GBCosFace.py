@@ -18,7 +18,7 @@ class SmoothedCrossEntropy(torch.nn.Module):
         return loss
 
 class GBCosFace(torch.nn.Module):
-    def __init__(self, local_rank, s=32, min_cos_v=0.5, max_cos_v=0.7, margin=0.16, update_rate=0.01, alpha=0.15):
+    def __init__(self, local_rank, eps, s=32, min_cos_v=0.5, max_cos_v=0.7, margin=0.16, update_rate=0.01, alpha=0.15):
         super(GBCosFace, self).__init__()
         self.scale = s
         self.margin = margin
@@ -28,7 +28,7 @@ class GBCosFace(torch.nn.Module):
         self.target = torch.from_numpy(np.array([0], np.int64))
         self.update_rate = update_rate
         self.alpha = alpha
-        self.cross_entropy = torch.nn.CrossEntropyLoss(reduce=False)
+        self.label_smooth_loss = SmoothedCrossEntropy(eps=eps) 
         self.local_rank = local_rank
 
     def forward(self, cos_theta, labels, **args):
@@ -79,11 +79,6 @@ class GBCosFace(torch.nn.Module):
 
         # update cos_v
         self.cos_v = (1-self.update_rate) * self.cos_v + self.update_rate * cos_v_update
-        
-        # Sync pv on multiple gpus
-        dist.all_reduce(self.cos_v, op=ReduceOp.SUM)
-        world_size = dist.get_world_size()
-        self.cos_v /= world_size
 
         # for debug log
         delta_p = torch.softmax(2*self.scale * pos_pred.detach(), 1)
