@@ -8,3 +8,4 @@ GBCosFace:
     margin: 0.16
     update_rate: 0.01
     alpha: 0.15
+    eps: 0.05
