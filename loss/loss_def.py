@@ -29,7 +29,8 @@ class LossFactory:
                 max_cos_v=self.loss_param['max_cos_v'],
                 margin=self.loss_param['margin'],
                 update_rate=self.loss_param['update_rate'],
-                alpha=self.loss_param['alpha']
+                alpha=self.loss_param['alpha'],
+                eps=self.loss_param.get('eps')
                 )
         else:
             pass
