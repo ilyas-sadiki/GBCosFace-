@@ -1,8 +1,6 @@
 import yaml
 from torch.nn import CrossEntropyLoss as CELoss
 from .GBCosFace import GBCosFace
-from .GBMagFace import GBMagFace
-
 
 class LossFactory:
     """Factory to produce loss according the loss_conf.yaml.
@@ -15,7 +13,7 @@ class LossFactory:
         self.loss_type = loss_type
         self.local_rank = local_rank
         with open(loss_conf_file) as f:
-            loss_conf = yaml.load(f)
+            loss_conf = yaml.load(f, Loader=yaml.FullLoader)
             self.loss_param = loss_conf[loss_type]
         print('loss param:')
         print(self.loss_param)
@@ -30,15 +28,6 @@ class LossFactory:
                 min_cos_v=self.loss_param['min_cos_v'],
                 max_cos_v=self.loss_param['max_cos_v'],
                 margin=self.loss_param['margin'],
-                update_rate=self.loss_param['update_rate'],
-                alpha=self.loss_param['alpha']
-                )
-        elif self.loss_type == 'GBMagFace':
-            loss = GBMagFace(
-                local_rank=self.local_rank,
-                s=self.loss_param['s'],
-                min_cos_v=self.loss_param['min_cos_v'],
-                max_cos_v=self.loss_param['max_cos_v'],
                 update_rate=self.loss_param['update_rate'],
                 alpha=self.loss_param['alpha']
                 )
