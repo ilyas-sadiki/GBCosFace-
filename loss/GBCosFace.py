@@ -71,7 +71,7 @@ class GBCosFace(torch.nn.Module):
         # loss_n
         neg_pred = torch.cat((cos_v_pred - self.margin, cos_n), -1)
         target = self.target.expand(batchsize).to(cos_theta.device)
-        neg_loss = self.cross_entropy(2 * self.scale * neg_pred, target.long())
+        neg_loss = self.cross_entropy(2 * self.scale * pos_pred, target.long())
          
         # cal mean
         pos_loss = torch.mean(pos_loss) / 2
