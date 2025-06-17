@@ -2,6 +2,7 @@ import sys
 import yaml
 sys.path.append('../../')
 from head.BaseHead import BaseHead
+from head.SubCenterHead import SubCenterHead
 
 
 class HeadFactory:
@@ -25,6 +26,11 @@ class HeadFactory:
             feat_dim = self.head_param['feat_dim'] # dimension of the output features, e.g. 512 
             num_class = self.head_param['num_class'] # number of classes in the training set.
             head = BaseHead(feat_dim, num_class)
+        if self.head_type == 'SubCenterHead':
+            feat_dim = self.head_param['feat_dim']
+            num_class = self.head_param['num_class']
+            k = self.head_param.get('k', 3)
+            head = SubCenterHead(feat_dim, num_class, k)
         else:
             pass
         return head
