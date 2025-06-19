@@ -28,20 +28,20 @@ class GBCosFace(torch.nn.Module):
         self.target = torch.from_numpy(np.array([0], np.int64))
         self.update_rate = update_rate
         self.alpha = alpha
-        self.label_smooth_loss = SmoothedCrossEntropy(eps=eps) 
+        self.label_smooth_loss = SmoothedCrossEntropy(eps=eps)
         self.local_rank = local_rank
 
     def forward(self, cos_theta, labels, **args):
         def cal_cos_n(pi, s):
             cos_n = torch.logsumexp(s*pi, dim=-1) / s
             return cos_n.unsqueeze(-1)
-        
+
         update_rate = self.update_rate
         batchsize = cos_theta.size()[0]
         index = torch.zeros_like(cos_theta)
         index.scatter_(1, labels.data.view(-1, 1), 1)
         index = index.bool()
-        
+
         # pos cos similarities
         cos_p = cos_theta[index].unsqueeze(-1)
         cos_pm = cos_p - self.margin
@@ -51,42 +51,55 @@ class GBCosFace(torch.nn.Module):
         cos_i = cos_theta[index_neg]
         cos_i = cos_i.view(batchsize, -1)
 
-        # cal pv
+        # cal pv and update cos_v
         cos_n = cal_cos_n(cos_i, self.scale)
         cos_v = (cos_p.detach() + cos_n.detach()) / 2
         cos_v_update = torch.mean(cos_v).reshape(1)
         if self.cos_v is None:
             self.cos_v = cos_v_update
         self.cos_v = torch.clamp(self.cos_v, self.min_cos_v, self.max_cos_v)
-    
+
         delta = self.alpha * (self.cos_v - cos_v)
         delta_for_log = torch.mean(torch.abs(delta))
         cos_v_pred = cos_v + delta
 
-        # loss_p
-        pos_pred = torch.cat((cos_pm, cos_v_pred), -1)
+        # === Standard Terms ===
+        std_pos_pred = torch.cat((cos_pm, cos_v_pred), -1)              # [py - m, pv]
+        std_neg_pred = torch.cat((cos_v_pred - self.margin, cos_n), -1) # [pv - m, pn]
         target = self.target.expand(batchsize).to(cos_theta.device)
-        pos_loss = self.label_smooth_loss(2 * self.scale * pos_pred, target.long())
+        std_pos_loss = self.label_smooth_loss(2 * self.scale * std_pos_pred, target.long())
+        std_neg_loss = self.label_smooth_loss(2 * self.scale * std_neg_pred, target.long())
+        std_loss = (1 - self.alpha) * (std_pos_loss + std_neg_loss) / 2
 
-        # loss_n
-        neg_pred = torch.cat((cos_v_pred - self.margin, cos_n), -1)
-        target = self.target.expand(batchsize).to(cos_theta.device)
-        neg_loss = self.label_smooth_loss(2 * self.scale * neg_pred, target.long())
-         
-        # cal mean
-        pos_loss = torch.mean(pos_loss) / 2
-        neg_loss = torch.mean(neg_loss) / 2
+        # === Reversed Smoothed Terms ===
+        rev_pos_pred = torch.cat((cos_n, cos_v_pred), -1)               # [pn, pv]
+        rev_neg_pred = torch.cat((cos_v_pred - self.margin, cos_pm), -1) # [pv - m, py - m]
+        rev_pos_loss = self.label_smooth_loss(2 * self.scale * rev_pos_pred, target.long())
+        rev_neg_loss = self.label_smooth_loss(2 * self.scale * rev_neg_pred, target.long())
+        rev_loss = self.alpha * (rev_pos_loss + rev_neg_loss) / 2
+
+        total_loss = std_loss + rev_loss
 
         # update cos_v
-        self.cos_v = (1-self.update_rate) * self.cos_v + self.update_rate * cos_v_update
+        self.cos_v = (1 - self.update_rate) * self.cos_v + self.update_rate * cos_v_update
 
         # for debug log
-        delta_p = torch.softmax(2*self.scale * pos_pred.detach(), 1)
-        delta_n = torch.softmax(2*self.scale * neg_pred.detach(), 1)
+        delta_p = torch.softmax(2*self.scale * std_pos_pred.detach(), 1)
+        delta_n = torch.softmax(2*self.scale * std_neg_pred.detach(), 1)
         delta_p = delta_p[:, 1]
         delta_n = torch.sum(delta_n[:, 1:], 1)
         delta_p_mean = torch.mean(delta_p)
         delta_n_mean = torch.mean(delta_n)
 
-        loss = dict(loss_pos=pos_loss, loss_neg=neg_loss, cos_v=self.cos_v,delta_p=delta_p_mean, delta_n=delta_n_mean, delta=delta_for_log,update_rate=update_rate)
-        return loss
+        return dict(
+            loss=total_loss,
+            loss_pos=std_pos_loss,
+            loss_neg=std_neg_loss,
+            rev_pos=rev_pos_loss,
+            rev_neg=rev_neg_loss,
+            cos_v=self.cos_v,
+            delta_p=delta_p_mean,
+            delta_n=delta_n_mean,
+            delta=delta_for_log,
+            update_rate=update_rate
+        )
