@@ -70,14 +70,14 @@ class GBCosFace(torch.nn.Module):
         target = self.target.expand(batchsize).to(cos_theta.device)
         std_pos_loss = self.label_smooth_loss(2 * self.scale * std_pos_pred, target.long())
         std_neg_loss = self.label_smooth_loss(2 * self.scale * std_neg_pred, target.long())
-        std_loss = (1 - self.eps) * (std_pos_loss + std_neg_loss) / 2
+        std_loss = (1 - self.alpha) * (std_pos_loss + std_neg_loss) / 2
 
         # === Reversed Smoothed Terms ===
         rev_pos_pred = torch.cat((cos_n, cos_v_pred), -1)               # [pn, pv]
         rev_neg_pred = torch.cat((cos_v_pred - self.margin, cos_pm), -1) # [pv - m, py - m]
         rev_pos_loss = self.label_smooth_loss(2 * self.scale * rev_pos_pred, target.long())
         rev_neg_loss = self.label_smooth_loss(2 * self.scale * rev_neg_pred, target.long())
-        rev_loss = self.eps * (rev_pos_loss + rev_neg_loss) / 2
+        rev_loss = self.alpha * (rev_pos_loss + rev_neg_loss) / 2
 
         total_loss = std_loss + rev_loss
 
